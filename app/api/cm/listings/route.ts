@@ -60,9 +60,30 @@ export async function POST(req:NextRequest){
   const baseSlug=body.title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'').slice(0,60)||'publicacion';
   const slug=`${baseSlug}-${Math.random().toString(36).slice(2,7)}`;
   const coords=neighborhoodCoords[neighborhood];
+
+  const pricingRes=await fetch(`${SUPABASE_URL}/rest/v1/rpc/cm_pricing_status`,{method:'POST',headers:{...baseHeaders,Authorization:`Bearer ${token}`},body:'{}',cache:'no-store'});
+  if(!pricingRes.ok)return NextResponse.json({error:'pricing_unavailable'},{status:502});
+  const pricingRaw=await pricingRes.json();const pricing=Array.isArray(pricingRaw)?pricingRaw[0]:pricingRaw;
+  const requiresPayment=Boolean(pricing?.requires_payment);
+  const feeMinor=Number(pricing?.fee_minor||1500);
+
+  if(requiresPayment){
+    const serviceRole=process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if(!serviceRole)return NextResponse.json({error:'publication_fee_required',feeMinor,paymentsConfigured:false,cohort:pricing?.cohort},{status:402});
+    const rpc=await fetch(`${SUPABASE_URL}/rest/v1/rpc/cm_publish_listing_server`,{method:'POST',headers:{apikey:serviceRole,Authorization:`Bearer ${serviceRole}`,'Content-Type':'application/json'},body:JSON.stringify({
+      p_user_id:user.id,p_slug:slug,p_title:body.title.trim(),p_category:category,p_neighborhood:neighborhood,p_venue:body.venue?.trim()||null,
+      p_starts_at:start.toISOString(),p_expires_at:expires.toISOString(),p_price_label:body.price?.trim()||null,p_description:body.description?.trim()||null,
+      p_destination_type:normalizedDestination,p_destination_url:destinationUrl,p_latitude:coords?.[0]||null,p_longitude:coords?.[1]||null
+    }),cache:'no-store'});
+    if(!rpc.ok){const raw=await rpc.text();if(raw.includes('publication_fee_required'))return NextResponse.json({error:'publication_fee_required',feeMinor,paymentsConfigured:true,cohort:pricing?.cohort},{status:402});return NextResponse.json({error:'create_failed',detail:raw.slice(0,300)},{status:502})}
+    const out=await rpc.json();const row=Array.isArray(out)?out[0]:out;
+    return NextResponse.json({data:{slug:row.listing_slug},pricing:{cohort:row.cohort,chargedMinor:Number(row.charged_minor||0)}},{status:201});
+  }
+
   const row={owner_id:user.id,slug,title:body.title.trim(),category,city:'Buenos Aires',neighborhood,venue:body.venue?.trim()||null,starts_at:start.toISOString(),expires_at:expires.toISOString(),price_label:body.price?.trim()||null,description:body.description?.trim()||null,destination_type:normalizedDestination,destination_url:destinationUrl,source_type:'organizer',claimed:true,status:'active',latitude:coords?.[0]||null,longitude:coords?.[1]||null};
   const write=await fetch(`${SUPABASE_URL}/rest/v1/cm_listings`,{method:'POST',headers:{...baseHeaders,Authorization:`Bearer ${token}`,Prefer:'return=representation'},body:JSON.stringify(row),cache:'no-store'});
   if(!write.ok){const text=await write.text();return NextResponse.json({error:'create_failed',detail:text.slice(0,300)},{status:write.status})}
   const created=await write.json();
-  return NextResponse.json({data:created[0]},{status:201});
+  await fetch(`${SUPABASE_URL}/rest/v1/cm_pricing_events`,{method:'POST',headers:{...baseHeaders,Authorization:`Bearer ${token}`},body:JSON.stringify({user_id:user.id,cohort:pricing?.cohort||'UNKNOWN',event_name:'published',listing_id:created[0]?.id,amount_minor:0,metadata:{charged:false}}),cache:'no-store'}).catch(()=>{});
+  return NextResponse.json({data:created[0],pricing:{cohort:pricing?.cohort,chargedMinor:0}},{status:201});
 }

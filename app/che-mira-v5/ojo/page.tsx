@@ -1,68 +1,34 @@
 'use client';
 
 import Link from 'next/link';
-import {useMemo,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import './style.css';
 
 type Market='HOY'|'ESTA NOCHE'|'MAÑANA'|'FINDE'|'PRÓXIMOS';
-type Listing={id:string;title:string;eligible:Market[]};
+type Listing={id:string;title:string;eligible:Market[];currentBid?:number};
 type Bid={title:string;amount:number};
-
-const listings:Listing[]=[
-  {id:'cata',title:'Cata de vinos naturales',eligible:['HOY']},
-  {id:'dj',title:'DJ set + vinilos',eligible:['ESTA NOCHE']},
-  {id:'pasta',title:'Taller de pasta fresca',eligible:['MAÑANA']},
-  {id:'festival',title:'Festival japonés',eligible:['PRÓXIMOS']},
-];
-
-const marketBids:Record<Market,Bid[]>={
-  'HOY':[{title:'Noche de Pizzas',amount:31500},{title:'Jazz en un living',amount:21800},{title:'Mesa coreana',amount:17600}],
-  'ESTA NOCHE':[{title:'Fiesta Bohemia',amount:42100},{title:'Stand up en vivo',amount:24700},{title:'Cócteles de autor',amount:18400}],
-  'MAÑANA':[{title:'Sunset en rooftop',amount:15400},{title:'Sauna nocturno',amount:10900}],
-  'FINDE':[{title:'Feria de diseño',amount:36400},{title:'Brunch de autor',amount:29100},{title:'Fiesta Patio Sur',amount:20900}],
-  'PRÓXIMOS':[{title:'Cena en seis pasos',amount:21300},{title:'Muestra inmersiva',amount:13200}],
-};
-
+type Mine={slug:string;title:string;starts_at:string;status:string;ojo:null|{market_key:Market;amount_minor:number}};
+type RemoteBid={amount_minor:number;listing:null|{title:string}};
+const fallbackListings:Listing[]=[{id:'cata-vinos-naturales',title:'Cata de vinos naturales',eligible:['HOY']},{id:'dj-set-vinilos',title:'DJ set + vinilos',eligible:['ESTA NOCHE']},{id:'taller-pasta-fresca',title:'Taller de pasta fresca',eligible:['MAÑANA']},{id:'festival-japones',title:'Festival japonés',eligible:['PRÓXIMOS']}];
+const fallbackBids:Record<Market,Bid[]>={'HOY':[{title:'Noche de Pizzas',amount:31500},{title:'Jazz en un living',amount:21800}], 'ESTA NOCHE':[{title:'Fiesta Bohemia',amount:42100},{title:'Stand up en vivo',amount:24700}], 'MAÑANA':[{title:'Sunset en rooftop',amount:15400},{title:'Sauna nocturno',amount:10900}], 'FINDE':[{title:'Feria de diseño',amount:36400},{title:'Brunch de autor',amount:29100}], 'PRÓXIMOS':[{title:'Festival japonés',amount:28600},{title:'Cena en seis pasos',amount:21300}]};
 const money=(n:number)=>'$'+new Intl.NumberFormat('es-AR').format(n);
+const dayKey=(d:Date)=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+const bucket=(iso:string):Market=>{const d=new Date(iso);const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Argentina/Buenos_Aires',weekday:'short',hour:'2-digit',hour12:false}).formatToParts(d).reduce<Record<string,string>>((a,p)=>{a[p.type]=p.value;return a},{});const key=dayKey(d);const today=dayKey(new Date());const tomorrow=dayKey(new Date(Date.now()+86400000));if(key===today)return Number(parts.hour)>=23?'ESTA NOCHE':'HOY';if(key===tomorrow)return'MAÑANA';if(parts.weekday==='Sat'||parts.weekday==='Sun')return'FINDE';return'PRÓXIMOS'};
 
 export default function OjoFlow(){
-  const [listingId,setListingId]=useState('cata');
-  const listing=listings.find(x=>x.id===listingId)!;
-  const [market,setMarket]=useState<Market>(listing.eligible[0]);
-  const [amount,setAmount]=useState(32000);
-  const [confirmed,setConfirmed]=useState(false);
-
-  const chooseListing=(id:string)=>{const next=listings.find(x=>x.id===id)!;setListingId(id);setMarket(next.eligible[0]);setConfirmed(false)};
-  const existing=marketBids[market];
+  const [listings,setListings]=useState<Listing[]>(fallbackListings);const [listingId,setListingId]=useState(fallbackListings[0].id);const [market,setMarket]=useState<Market>('HOY');const [amount,setAmount]=useState(32000);const [confirmed,setConfirmed]=useState(false);const [liveBids,setLiveBids]=useState<Bid[]|null>(null);const [auth,setAuth]=useState(false);
+  const listing=listings.find(x=>x.id===listingId)||listings[0];
+  useEffect(()=>{const requested=new URLSearchParams(window.location.search).get('listing');const token=localStorage.getItem('cm_access_token');if(!token){if(requested&&fallbackListings.some(x=>x.id===requested))setListingId(requested);return}setAuth(true);fetch('/api/cm/mine',{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.ok?r.json():Promise.reject()).then(({data}:{data:Mine[]})=>{const owned=data.filter(x=>x.status==='active').map(x=>({id:x.slug,title:x.title,eligible:[x.ojo?.market_key||bucket(x.starts_at)] as Market[],currentBid:x.ojo?.amount_minor}));if(owned.length){setListings(owned);const selected=owned.find(x=>x.id===requested)||owned[0];setListingId(selected.id);setMarket(selected.eligible[0]);if(selected.currentBid)setAmount(selected.currentBid)}}).catch(()=>{})},[]);
+  useEffect(()=>{setLiveBids(null);fetch(`/api/cm/ojo?market=${encodeURIComponent(market)}`).then(r=>r.ok?r.json():Promise.reject()).then(({data}:{data:RemoteBid[]})=>{const rows=data.filter(x=>x.listing).map(x=>({title:x.listing!.title,amount:x.amount_minor}));if(rows.length)setLiveBids(rows)}).catch(()=>{})},[market]);
+  const chooseListing=(id:string)=>{const next=listings.find(x=>x.id===id)!;setListingId(id);setMarket(next.eligible[0]);setAmount(next.currentBid||100);setConfirmed(false)};
+  const existing=(liveBids||fallbackBids[market]).filter(x=>x.title!==listing.title);
   const ranked=useMemo(()=>[...existing,{title:listing.title,amount}].sort((a,b)=>b.amount-a.amount),[existing,listing.title,amount]);
-  const position=ranked.findIndex(x=>x.title===listing.title)+1;
-  const leader=existing[0]?.amount||0;
-  const toFirst=Math.max(0,leader+100-amount);
-
-  if(confirmed)return <main className="ojoFlow"><header className="ojoTop"><Link href="/che-mira-v5" className="ojoLogo">CHE, MIRÁ</Link><span>OJO ACÁ</span></header><section className="ojoConfirmed"><span>DEMO · SIN COBRO REAL</span><h1>Entraste al ranking.</h1><p><b>{listing.title}</b> quedaría #{position} en <b>{market}</b> con una puja de <b>{money(amount)}</b>.</p><div className="confirmRank">{ranked.map((x,i)=><div key={x.title} className={x.title===listing.title?'you':''}><b>#{i+1}</b><span>{x.title}</span><strong>{money(x.amount)}</strong></div>)}</div><div className="confirmActions"><Link href="/che-mira-v5">Ver Ojo Acá</Link><Link href="/che-mira-v5/mis-publicaciones">Mis publicaciones</Link></div></section></main>;
-
-  return <main className="ojoFlow">
-    <header className="ojoTop"><Link href="/che-mira-v5" className="ojoLogo">CHE, MIRÁ</Link><span>OJO ACÁ</span><Link href="/che-mira-v5/mis-publicaciones">Mis publicaciones</Link></header>
-
-    <section className="ojoTitle"><div><span>COMPRÁ ATENCIÓN</span><h1>Entrá a<br/>Ojo Acá.</h1></div><p>No comprás reputación ni una recomendación. Comprás una posición visible en un ranking público.</p></section>
-
-    <div className="ojoLayout">
-      <section className="ojoControls">
-        <div className="flowBlock"><span>01 · QUÉ QUERÉS EMPUJAR</span><select value={listingId} onChange={e=>chooseListing(e.target.value)}>{listings.map(x=><option value={x.id} key={x.id}>{x.title}</option>)}</select></div>
-
-        <div className="flowBlock"><span>02 · EN QUÉ VENTANA</span><div className="marketChoices">{listing.eligible.map(x=><button className={market===x?'active':''} onClick={()=>setMarket(x)} key={x}>{x}</button>)}</div><small>Sólo aparecen mercados compatibles con la fecha de tu publicación.</small></div>
-
-        <div className="flowBlock moneyBlock"><span>03 · CUÁNTA ATENCIÓN</span><label><small>TU PUJA</small><div><b>$</b><input type="number" min="100" step="100" value={amount} onChange={e=>setAmount(Math.max(0,Number(e.target.value)))}/></div></label>
-        <div className="quickMoney"><button onClick={()=>setAmount((existing.at(-1)?.amount||0)+100)}>Entrar al ranking</button><button onClick={()=>setAmount(leader+100)}>Ir al #1 · {money(leader+100)}</button></div></div>
-
-        <div className="flowSummary"><div><span>RESULTADO AHORA</span><strong>#{position}</strong><p>{position===1?'Quedarías arriba de todos.':toFirst?`Te faltan ${money(toFirst)} para quedar #1.`:'Estás #1.'}</p></div><button onClick={()=>setConfirmed(true)}>Confirmar puja demo →</button><small>No se procesa ningún pago en este prototipo.</small></div>
-      </section>
-
-      <aside className="liveMarket">
-        <div className="liveHead"><span>RANKING EN VIVO</span><h2>{market}</h2><p>Cambia mientras cambiás tu puja.</p></div>
-        <div className="liveRanks">{ranked.map((x,i)=><article key={x.title} className={x.title===listing.title?'you':''}><b>#{i+1}</b><div><strong>{x.title}</strong>{x.title===listing.title&&<span>VOS · PREVIEW</span>}</div><strong>{money(x.amount)}</strong></article>)}</div>
-        <div className="marketRule"><b>La regla completa:</b><p>Más plata acumulada en esta ventana = posición más alta. Sin score oculto.</p></div>
-      </aside>
-    </div>
-  </main>
+  const position=ranked.findIndex(x=>x.title===listing.title)+1;const leader=existing[0]?.amount||0;const floor=existing.at(-1)?.amount||0;const toFirst=Math.max(0,leader+100-amount);
+  if(confirmed)return <main className="ojoFlow"><header className="ojoTop"><Link href="/che-mira-v5" className="ojoLogo">CHE, MIRÁ</Link><span>OJO ACÁ</span></header><section className="ojoConfirmed"><span>DEMO · SIN COBRO REAL</span><h1>Así quedaría.</h1><p><b>{listing.title}</b> quedaría #{position} en <b>{market}</b> con una puja de <b>{money(amount)}</b>.</p><div className="confirmRank">{ranked.map((x,i)=><div key={x.title} className={x.title===listing.title?'you':''}><b>#{i+1}</b><span>{x.title}</span><strong>{money(x.amount)}</strong></div>)}</div><div className="confirmActions"><Link href="/che-mira-v5">Ver Ojo Acá</Link><Link href="/che-mira-v5/mis-publicaciones">Mis publicaciones</Link></div><p><small>La puja no se guarda ni se cobra: el checkout real queda bloqueado hasta definir pagos.</small></p></section></main>;
+  return <main className="ojoFlow"><header className="ojoTop"><Link href="/che-mira-v5" className="ojoLogo">CHE, MIRÁ</Link><span>OJO ACÁ</span><Link href="/che-mira-v5/mis-publicaciones">Mis publicaciones</Link></header><section className="ojoTitle"><div><span>COMPRÁ ATENCIÓN</span><h1>Entrá a<br/>Ojo Acá.</h1></div><p>No comprás reputación ni una recomendación. Comprás una posición visible en un ranking público.</p></section><div className="ojoLayout"><section className="ojoControls">
+    <div className="flowBlock"><span>01 · QUÉ QUERÉS EMPUJAR</span>{auth?<select value={listingId} onChange={e=>chooseListing(e.target.value)}>{listings.map(x=><option value={x.id} key={x.id}>{x.title}</option>)}</select>:<><select value={listingId} onChange={e=>chooseListing(e.target.value)}>{listings.map(x=><option value={x.id} key={x.id}>{x.title}</option>)}</select><small><Link href="/che-mira-v5/acceso?next=/che-mira-v5/ojo">Entrá a tu cuenta</Link> para usar tus publicaciones reales.</small></>}</div>
+    <div className="flowBlock"><span>02 · EN QUÉ VENTANA</span><div className="marketChoices">{listing.eligible.map(x=><button className={market===x?'active':''} onClick={()=>setMarket(x)} key={x}>{x}</button>)}</div><small>La ventana sale de la fecha del evento. No se elige una categoría que no corresponda.</small></div>
+    <div className="flowBlock moneyBlock"><span>03 · CUÁNTA ATENCIÓN</span><label><small>TU PUJA</small><div><b>$</b><input type="number" min="100" step="100" value={amount} onChange={e=>setAmount(Math.max(0,Number(e.target.value)))}/></div></label><div className="quickMoney"><button onClick={()=>setAmount(floor+100)}>Entrar al ranking · {money(floor+100)}</button><button onClick={()=>setAmount(leader+100)}>Ir al #1 · {money(leader+100)}</button></div></div>
+    <div className="flowSummary"><div><span>RESULTADO AHORA</span><strong>#{position}</strong><p>{position===1?'Quedarías arriba de todos.':`Te faltan ${money(toFirst)} para quedar #1.`}</p></div><button onClick={()=>setConfirmed(true)}>Continuar demo →</button><small>No se procesa ningún pago ni se modifica el ranking real.</small></div>
+  </section><aside className="liveMarket"><div className="liveHead"><span>RANKING EN VIVO</span><h2>{market}</h2><p>Cambia mientras cambiás tu puja.</p></div><div className="liveRanks">{ranked.map((x,i)=><article key={x.title} className={x.title===listing.title?'you':''}><b>#{i+1}</b><div><strong>{x.title}</strong>{x.title===listing.title&&<span>VOS · PREVIEW</span>}</div><strong>{money(x.amount)}</strong></article>)}</div><div className="marketRule"><b>La regla completa:</b><p>Más plata acumulada en esta ventana = posición más alta. Sin score oculto.</p></div></aside></div></main>
 }

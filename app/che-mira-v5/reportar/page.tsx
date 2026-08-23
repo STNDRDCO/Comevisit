@@ -1,0 +1,15 @@
+'use client';
+
+import Link from 'next/link';
+import {FormEvent,useEffect,useState} from 'react';
+import '../reclamar/style.css';
+
+type Listing={slug:string;title:string;neighborhood:string};
+const reasons=[['wrong_info','La información está mal'],['duplicate','Está duplicado'],['expired','Ya no corresponde'],['spam','Es spam'],['unsafe','Contenido problemático'],['other','Otro']];
+
+export default function Reportar(){
+  const [slug,setSlug]=useState('');const [listing,setListing]=useState<Listing|null>(null);const [reason,setReason]=useState('wrong_info');const [detail,setDetail]=useState('');const [status,setStatus]=useState<'idle'|'sending'|'done'>('idle');const [error,setError]=useState('');
+  useEffect(()=>{const q=new URLSearchParams(window.location.search);const s=q.get('listing')||'';setSlug(s);if(s)fetch(`/api/cm/listings?slug=${encodeURIComponent(s)}`).then(r=>r.json()).then(x=>setListing(x.data)).catch(()=>{})},[]);
+  const submit=async(e:FormEvent)=>{e.preventDefault();const token=localStorage.getItem('cm_access_token');if(!token){window.location.href=`/che-mira-v5/acceso?next=${encodeURIComponent(`/che-mira-v5/reportar?listing=${slug}`)}`;return}setStatus('sending');setError('');const r=await fetch('/api/cm/report',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({slug,reason,detail})});if(r.status===401){localStorage.removeItem('cm_access_token');window.location.href=`/che-mira-v5/acceso?next=${encodeURIComponent(`/che-mira-v5/reportar?listing=${slug}`)}`;return}if(!r.ok){setStatus('idle');setError('No pudimos enviar el reporte.');return}setStatus('done')};
+  return <main className="controlPage"><header className="controlTop"><Link href="/che-mira-v5" className="controlLogo">CHE, MIRÁ</Link><span>REPORTAR</span><Link href={slug?`/che-mira-v5/p/${slug}`:'/che-mira-v5'}>Cerrar</Link></header><section className="controlLayout"><div className="controlCopy"><span>AYUDANOS A MANTENER LIMPIO EL FEED</span><h1>¿Qué pasa?</h1><p>Reportar no afecta automáticamente una publicación. Genera una señal de moderación para revisar información, duplicados o spam.</p>{listing&&<div className="subject"><small>PUBLICACIÓN</small><strong>{listing.title}</strong><span>{listing.neighborhood}</span></div>}</div><form onSubmit={submit} className="controlCard"><span>MOTIVO</span><label><b>¿Qué problema tiene?</b><select value={reason} onChange={e=>setReason(e.target.value)}>{reasons.map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label><label><b>Detalle <small>opcional</small></b><textarea value={detail} maxLength={500} onChange={e=>setDetail(e.target.value)} placeholder="Contanos qué viste."/></label>{error&&<p className="controlError">{error}</p>}{status==='done'?<div className="controlDone"><b>Reporte enviado.</b><span>Gracias. Queda para revisión.</span></div>:<button className="controlSubmit" disabled={!slug||status==='sending'}>{status==='sending'?'Enviando…':'Enviar reporte →'}</button>}<small>Para evitar reportes basura, pedimos una cuenta antes de enviarlo.</small></form></section></main>
+}

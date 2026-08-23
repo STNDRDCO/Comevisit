@@ -8,11 +8,12 @@ async function adminContext(req:NextRequest){const token=req.headers.get('author
 
 export async function GET(req:NextRequest){
   const ctx=await adminContext(req);if('error'in ctx)return NextResponse.json({error:ctx.error},{status:ctx.status});
-  const [reports,claims]=await Promise.all([
+  const [reports,claims,metrics]=await Promise.all([
     fetch(`${URL}/rest/v1/cm_reports?select=id,listing_id,reporter_id,reason,detail,status,created_at,listing:cm_listings(slug,title,neighborhood,starts_at)&status=eq.open&order=created_at.asc`,{headers:ctx.headers,cache:'no-store'}),
-    fetch(`${URL}/rest/v1/cm_claims?select=id,listing_id,claimant_id,note,status,created_at,listing:cm_listings(slug,title,neighborhood,starts_at)&status=eq.pending&order=created_at.asc`,{headers:ctx.headers,cache:'no-store'})
+    fetch(`${URL}/rest/v1/cm_claims?select=id,listing_id,claimant_id,note,status,created_at,listing:cm_listings(slug,title,neighborhood,starts_at)&status=eq.pending&order=created_at.asc`,{headers:ctx.headers,cache:'no-store'}),
+    fetch(`${URL}/rest/v1/rpc/cm_alpha_metrics_admin`,{method:'POST',headers:ctx.headers,body:'{}',cache:'no-store'})
   ]);
-  return NextResponse.json({data:{reports:reports.ok?await reports.json():[],claims:claims.ok?await claims.json():[]}},{headers:{'Cache-Control':'no-store'}});
+  return NextResponse.json({data:{reports:reports.ok?await reports.json():[],claims:claims.ok?await claims.json():[],metrics:metrics.ok?await metrics.json():null}},{headers:{'Cache-Control':'no-store'}});
 }
 
 export async function POST(req:NextRequest){

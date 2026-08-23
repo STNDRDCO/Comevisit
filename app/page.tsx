@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { DbCity, DbLeaderboardEntry, DbPlace, DbSeason, fetchCities, fetchCityBundle, submitPlace } from '../lib/supabase-public';
+import { CityPulse, CountryPulse, DbCity, DbLeaderboardEntry, DbPlace, DbSeason, fetchCities, fetchCityBundle, fetchWorldPulse, submitPlace } from '../lib/supabase-public';
 
 type Category = 'All' | 'Eat' | 'Drink' | 'Do' | 'See' | 'Stay' | 'Shop' | 'Night' | 'Useful';
 const categories:Category[]=['All','Eat','Drink','Do','See','Stay','Shop','Night','Useful'];
@@ -26,6 +26,8 @@ export default function Home(){
   const [places,setPlaces]=useState<DbPlace[]>([]);
   const [season,setSeason]=useState<DbSeason|null>(null);
   const [leaderboard,setLeaderboard]=useState<DbLeaderboardEntry[]>([]);
+  const [cityPulse,setCityPulse]=useState<CityPulse[]>([]);
+  const [countryPulse,setCountryPulse]=useState<CountryPulse[]>([]);
   const [category,setCategory]=useState<Category>('All');
   const [query,setQuery]=useState('');
   const [modal,setModal]=useState<'bid'|'add'|'claim'|null>(null);
@@ -33,7 +35,7 @@ export default function Home(){
   const [submitStatus,setSubmitStatus]=useState('');
   const [now,setNow]=useState(Date.now());
 
-  useEffect(()=>{fetchCities().then(setCities).catch(console.error)},[]);
+  useEffect(()=>{fetchCities().then(setCities).catch(console.error);fetchWorldPulse().then(p=>{setCityPulse(p.cities);setCountryPulse(p.countries)}).catch(console.error)},[]);
   useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),30000);return()=>window.clearInterval(timer)},[]);
   useEffect(()=>{
     let live=true; setLoading(true);
@@ -73,7 +75,11 @@ export default function Home(){
   return <main>
     <header className="nav shell"><div className="brand">COME<span>VISIT</span></div><div className="navright"><span className="live">● LIVE CITIES</span><button onClick={()=>setModal('claim')}>For local businesses</button></div></header>
 
-    <section className="hero shell"><div className="kicker">THE WORLD, BUILT BY LOCALS</div><h1>Land somewhere.<br/><em>Know what to do.</em></h1><p>ComeVisit is the fast local layer between “I arrived” and “I know where I’m going.” Restaurants, bars, stays, walks and experiences — without the review-site sludge.</p><form onSubmit={search} className="search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Where are you going?"/><button>Explore</button></form><small>Search any city. Launch markets are demo-seeded and clearly labeled.</small></section>
+    <section className="hero shell"><div className="kicker">THE WORLD, BUILT BY LOCALS</div><h1>Land somewhere.<br/><em>Know what to do.</em></h1><p>Discover what to eat, see and do anywhere — then watch locals and businesses build the world in public.</p><form onSubmit={search} className="search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Where are you going?"/><button>Explore</button></form><small>Search any city. Launch markets are demo-seeded and clearly labeled.</small></section>
+
+    <section className="shell model"><div><span className="eyebrow">WORLD PULSE · LIVE DATABASE</span><h2>The world is being built.<br/>Watch where it moves.</h2><p>Countries and cities rank independently by community activity and competitive Crown volume. Demo markets are labeled; real published places remain separate.</p></div><div className="board">{countryPulse.slice(0,3).map((c,i)=><div className={i===0?'row winner':'row'} key={c.country_code}><b>#{i+1}</b><span><strong>{c.country_name}</strong><small>{c.active_cities} cit{c.active_cities===1?'y':'ies'} · {c.published_places} real places · {c.verified_businesses} verified</small></span><em>{money(c.crown_volume_cents)}</em></div>)}</div></section>
+
+    <section className="shell model"><div><span className="eyebrow">MOST COMPETITIVE CITIES · THIS WEEK</span><h2>City versus city.</h2><p>Crown volume is only one leaderboard. Next come Most Built, Fastest Growing and Most Active, so a city can win without spending the most.</p></div><div className="board">{cityPulse.slice(0,5).map((c,i)=><div className={i===0?'row winner':'row'} key={c.city_id}><b>#{i+1}</b><span><strong>{c.city_name}</strong><small>{c.country_name} · {c.crown_bid_events} market moves · {c.published_places} real places</small></span><em>{money(c.crown_volume_cents)}</em></div>)}</div></section>
 
     <section className="cityswitch shell"><div><span className="eyebrow">OPEN NOW</span><h2>Jump into a city</h2></div><div className="citybuttons">{cities.map(c=><button key={c.id} className={c.name===cityName?'active':''} onClick={()=>choose(c.name)}>{c.name}</button>)}</div></section>
 
@@ -89,7 +95,7 @@ export default function Home(){
 
     <section className="shell model"><div><span className="eyebrow">THIS WEEK'S MARKET</span><h2>Travel guide in front.<br/>Attention market underneath.</h2><p>Each Crown resets by season. A business keeps its cumulative spend during the week; to move from $185 to $189 it adds only $4. Then the board resets and competition starts fresh.</p></div><div className="board">{board.slice(0,3).map(entry=><div className={entry.rank===1?'row winner':'row'} key={entry.place_id}><b>#{entry.rank}</b><span><strong>{entry.place_name}</strong><small>{entry.bid_count} bid{entry.bid_count===1?'':'s'} · last move {new Date(entry.last_bid_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small></span><em>{money(entry.total_cents)}</em></div>)}{board.length===0?<div className="row winner"><b>#1</b><span><strong>Open Crown</strong><small>Be the first business this season</small></span><em>{money(minIncrement)}</em></div>:null}<button onClick={()=>setModal('bid')}>Take #1 at {money(takeTotal)} ↗</button></div></section>
 
-    <footer className="shell footer"><div className="brand">COME<span>VISIT</span></div><p>Find the city. Build the city. Own attention in the city.</p><span>v0.2.2 · Crown engine live</span></footer>
+    <footer className="shell footer"><div className="brand">COME<span>VISIT</span></div><p>The world, built by locals.</p><span>v0.2.3 · World Pulse live</span></footer>
 
     {modal?<div className="overlay" onMouseDown={()=>setModal(null)}><div className="modal" onMouseDown={e=>e.stopPropagation()}><button className="x" onClick={()=>setModal(null)}>×</button><span className="eyebrow">{modal==='bid'?'WEEKLY CROWN':modal==='claim'?'BUSINESS OWNERS':'LOCALS'}</span><h2>{modal==='bid'?`Take the ${displayCity} crown at ${money(takeTotal)}`:modal==='claim'?'Find and verify your business — free':`Add a place to ${displayCity}`}</h2>{modal==='add'?<form onSubmit={addPlace} style={{display:'grid',gap:12}}><input required name="place_name" placeholder="Place name"/><select name="category" defaultValue="eat"><option>eat</option><option>drink</option><option>do</option><option>see</option><option>stay</option><option>shop</option><option>night</option><option>useful</option></select><input name="website_url" placeholder="Website (optional)"/><input name="instagram_url" placeholder="Instagram (optional)"/><input name="email" type="email" placeholder="Your email (optional)"/><textarea name="note" placeholder="Why should travelers know it?"/><button type="submit">Submit place</button>{submitStatus?<small>{submitStatus}</small>:null}</form>:modal==='claim'?<><p>The claim flow will search an external business identity such as Google Places, then verify ownership. ComeVisit does not prelist the world and payment is not proof of ownership.</p><button onClick={()=>setModal(null)}>Continue soon</button></>:<><p>The wallet, season ledger and atomic bidding engine are already live. Checkout is intentionally provider-agnostic: once a payment provider is connected, funding the wallet activates real bids without changing this model.</p><p><strong>Important:</strong> if your business already spent in this season, you only pay the difference between your current total and the target total.</p><button onClick={()=>setModal(null)}>Got it</button></>}</div></div>:null}
   </main>

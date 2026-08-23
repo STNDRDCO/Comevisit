@@ -5,24 +5,19 @@ import {useEffect,useState} from 'react';
 import './style.css';
 
 type SavedItem={id:string;title:string;date:string;place:string;category:string;price:string};
-const items:Record<string,SavedItem>={
-  cata:{id:'cata',title:'Cata de vinos naturales',date:'HOY · 20:30',place:'VILLA CRESPO',category:'EXPERIENCIAS',price:'$35.000'},
-  dj:{id:'dj',title:'DJ set + vinilos',date:'HOY · 23:45',place:'CHACARITA',category:'MÚSICA',price:'GRATIS'},
-  parrilla:{id:'parrilla',title:'Menú de parrilla por pasos',date:'HOY · 21:00',place:'PALERMO',category:'COMER',price:'$52.000'},
-  standup:{id:'standup',title:'Stand up en vivo',date:'HOY · 21:30',place:'ALMAGRO',category:'CULTURA',price:'$7.000'},
-  pasta:{id:'pasta',title:'Taller de pasta fresca',date:'LUN 24 AGO · 19:00',place:'CABALLITO',category:'EXPERIENCIAS',price:'$28.000'},
-  feria:{id:'feria',title:'Feria de diseño independiente',date:'SÁB 29 AGO · 12:00',place:'PALERMO',category:'CULTURA',price:'GRATIS'},
-  jazz:{id:'jazz',title:'Jazz en un living',date:'HOY · 22:00',place:'COLEGIALES',category:'MÚSICA',price:'$14.000'},
-  brunch:{id:'brunch',title:'Brunch de autor',date:'DOM 30 AGO · 11:30',place:'COLEGIALES',category:'COMER',price:'$22.000'},
-  festival:{id:'festival',title:'Festival japonés',date:'SÁB 5 SEP · 14:00',place:'CHACARITA',category:'CULTURA',price:'$18.000'},
-  rooftop:{id:'rooftop',title:'Sunset en rooftop',date:'LUN 24 AGO · 18:30',place:'PALERMO',category:'SALIR',price:'$12.000'},
-};
+type RemoteListing={slug:string;title:string;category:string;neighborhood:string;starts_at:string;price_label:string|null};
+const aliases:Record<string,string>={cata:'cata-vinos-naturales',dj:'dj-set-vinilos',parrilla:'menu-parrilla-pasos',standup:'standup-en-vivo',pasta:'taller-pasta-fresca',feria:'feria-diseno-independiente',jazz:'jazz-en-un-living',brunch:'brunch-de-autor',festival:'festival-japones',rooftop:'sunset-rooftop'};
+const formatDate=(iso:string)=>new Intl.DateTimeFormat('es-AR',{timeZone:'America/Argentina/Buenos_Aires',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso)).replace(',',' ·').toUpperCase();
 
 export default function Guardados(){
   const [ids,setIds]=useState<string[]>([]);
-  useEffect(()=>setIds(JSON.parse(localStorage.getItem('cm5_saved')||'[]')),[ ]);
+  const [catalog,setCatalog]=useState<Record<string,SavedItem>>({});
+  useEffect(()=>{
+    const stored=JSON.parse(localStorage.getItem('cm5_saved')||'[]') as string[];setIds(stored);
+    fetch('/api/cm/listings').then(r=>r.ok?r.json():Promise.reject()).then(({data}:{data:RemoteListing[]})=>{const next:Record<string,SavedItem>={};for(const x of data){next[x.slug]={id:x.slug,title:x.title,date:formatDate(x.starts_at),place:x.neighborhood,category:x.category,price:x.price_label||'Consultar'}}setCatalog(next)}).catch(()=>{});
+  },[]);
   const remove=(id:string)=>{const next=ids.filter(x=>x!==id);setIds(next);localStorage.setItem('cm5_saved',JSON.stringify(next))};
-  const saved=ids.map(id=>items[id]).filter(Boolean);
+  const saved=ids.map(original=>{const id=aliases[original]||original;return catalog[id]}).filter(Boolean);
 
   return <main className="savedPage">
     <header className="savedTop"><Link href="/che-mira-v5" className="savedLogo">CHE, MIRÁ</Link><Link className="publish" href="/che-mira-v5/publicar">+ Publicar</Link></header>
@@ -30,6 +25,7 @@ export default function Guardados(){
     <section className="savedList">
       {saved.map(x=><article key={x.id}><div className="savedWhen"><strong>{x.date}</strong><span>{x.category}</span></div><div><h2><Link href={`/che-mira-v5/p/${x.id}`}>{x.title}</Link></h2><p>{x.place}</p></div><div className="savedActions"><b>{x.price}</b><button onClick={()=>remove(x.id)}>Quitar</button><Link href={`/che-mira-v5/p/${x.id}`}>Abrir ↗</Link></div></article>)}
       {saved.length===0&&<div className="savedEmpty"><h2>Todavía no guardaste nada.</h2><p>Usá ♡ cuando algo te interese y lo vas a encontrar acá.</p><Link href="/che-mira-v5#explorar">Explorar →</Link></div>}
+      {ids.length>0&&saved.length===0&&<div className="savedEmpty"><h2>Cargando tus guardados…</h2></div>}
     </section>
   </main>
 }

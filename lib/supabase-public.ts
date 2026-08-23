@@ -33,6 +33,7 @@ export type DbPlace = {
 export type DbSeason = {
   id: string;
   city_id: string;
+  market_id: string | null;
   category: DbPlace['category'] | null;
   starts_at: string;
   ends_at: string;
@@ -50,6 +51,34 @@ export type DbLeaderboardEntry = {
   bid_count: number;
   last_bid_at: string;
   rank: number;
+};
+
+export type DbLiveMarket = {
+  id:string;
+  city_id:string;
+  slug:string;
+  title:string;
+  eyebrow:string|null;
+  description:string|null;
+  context_type:'now'|'tonight'|'weekend'|'weather'|'seasonal'|'event'|'evergreen';
+  category:DbPlace['category']|null;
+  starts_at:string|null;
+  ends_at:string|null;
+  status:'draft'|'live'|'ended'|'cancelled';
+  sort_order:number;
+  is_demo:boolean;
+  place_count:number;
+  verified_businesses:number;
+  crown_volume_cents:number;
+  bid_events:number;
+};
+
+export type DbLiveMarketPlace = {
+  market_id:string;
+  place_id:string;
+  editorial_note:string|null;
+  sort_order:number;
+  is_demo:boolean;
 };
 
 export type CityPulse = {
@@ -102,9 +131,11 @@ export async function fetchCityBundle(cityName: string) {
   const city = (await supabaseFetch<DbCity[]>(`cities?select=*&name=ilike.${encodeURIComponent(cityName)}&limit=1`))[0];
   if (!city) return null;
 
-  const [places, seasons] = await Promise.all([
+  const [places, seasons, markets, marketPlaces] = await Promise.all([
     supabaseFetch<DbPlace[]>(`places?select=*&city_id=eq.${city.id}&order=created_at.asc`),
-    supabaseFetch<DbSeason[]>(`crown_seasons?select=*&city_id=eq.${city.id}&category=is.null&status=eq.open&order=ends_at.asc&limit=1`),
+    supabaseFetch<DbSeason[]>(`crown_seasons?select=*&city_id=eq.${city.id}&market_id=is.null&category=is.null&status=eq.open&order=ends_at.asc&limit=1`),
+    supabaseFetch<DbLiveMarket[]>(`live_market_cards?select=*&city_id=eq.${city.id}&order=sort_order.asc`),
+    supabaseFetch<DbLiveMarketPlace[]>(`live_market_places?select=market_id,place_id,editorial_note,sort_order,is_demo&order=sort_order.asc`),
   ]);
 
   const season = seasons[0] || null;
@@ -112,7 +143,8 @@ export async function fetchCityBundle(cityName: string) {
     ? await supabaseFetch<DbLeaderboardEntry[]>(`crown_leaderboard?select=*&season_id=eq.${season.id}&order=rank.asc`)
     : [];
 
-  return {city, places, season, leaderboard};
+  const marketIds = new Set(markets.map(m=>m.id));
+  return {city, places, season, leaderboard, markets, marketPlaces: marketPlaces.filter(mp=>marketIds.has(mp.market_id))};
 }
 
 export async function submitPlace(input: {

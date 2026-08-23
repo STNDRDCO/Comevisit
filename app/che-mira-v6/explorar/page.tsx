@@ -13,7 +13,7 @@ const priceTier=(label:string|null)=>{if(!label||/gratis/i.test(label))return'GR
 
 export default function Explorar(){
  const[items,setItems]=useState<Listing[]>([]);const[loading,setLoading]=useState(true);const[error,setError]=useState(false);const[category,setCategory]=useState('TODO');const[hood,setHood]=useState('TODOS');const[price,setPrice]=useState('TODOS');const[q,setQ]=useState('');const[near,setNear]=useState(false);const[coords,setCoords]=useState<[number,number]|null>(null);
- useEffect(()=>{fetch('/api/cm/listings').then(r=>{if(!r.ok)throw new Error();return r.json()}).then(x=>setItems(Array.isArray(x.data)?x.data:[])).catch(()=>setError(true)).finally(()=>setLoading(false))},[]);
+ useEffect(()=>{fetch('/api/cm/listings?today=1').then(r=>{if(!r.ok)throw new Error();return r.json()}).then(x=>setItems(Array.isArray(x.data)?x.data:[])).catch(()=>setError(true)).finally(()=>setLoading(false))},[]);
  const todayItems=useMemo(()=>items.filter(x=>isCheToday(x.starts_at)),[items]);
  const hoods=useMemo(()=>['TODOS',...Array.from(new Set(todayItems.map(x=>x.neighborhood))).sort()],[todayItems]);
  const distance=(x:Listing)=>{if(!coords||x.latitude==null||x.longitude==null)return Infinity;const[a,b]=coords,[c,d]=[x.latitude,x.longitude],R=6371,rad=(v:number)=>v*Math.PI/180;const da=rad(c-a),db=rad(d-b),s=Math.sin(da/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(db/2)**2;return 2*R*Math.asin(Math.sqrt(s))};

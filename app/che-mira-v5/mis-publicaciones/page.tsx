@@ -1,40 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import {useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import './style.css';
 
 type Status='ACTIVAS'|'PRÓXIMAS'|'VENCIDAS';
-type Pub={id:string;status:Status;title:string;date:string;place:string;published:string;views:number;clicks:number;price:string;promoted:boolean};
-
-const data:Pub[]=[
-  {id:'cata',status:'ACTIVAS',title:'Cata de vinos naturales',date:'HOY · 20:30',place:'Villa Crespo',published:'Hace 1 h',views:128,clicks:37,price:'$35.000',promoted:true},
-  {id:'dj',status:'ACTIVAS',title:'DJ set + vinilos',date:'HOY · 23:45',place:'Chacarita',published:'Hace 3 h',views:86,clicks:21,price:'Gratis',promoted:false},
-  {id:'pasta',status:'PRÓXIMAS',title:'Taller de pasta fresca',date:'LUN 24 AGO · 19:00',place:'Caballito',published:'Ayer',views:54,clicks:12,price:'$28.000',promoted:false},
-  {id:'festival',status:'PRÓXIMAS',title:'Festival japonés',date:'SÁB 5 SEP · 14:00',place:'Chacarita',published:'Hace 2 días',views:91,clicks:19,price:'$18.000',promoted:true},
-  {id:'old1',status:'VENCIDAS',title:'Brunch del domingo',date:'DOM 16 AGO · 11:30',place:'Colegiales',published:'Hace 10 días',views:174,clicks:42,price:'$22.000',promoted:false},
-];
+type ApiPub={id:string;slug:string;title:string;starts_at:string;expires_at:string;neighborhood:string;price_label:string|null;published_at:string;status:string;views:number;clicks:number;ojo:null|{market_key:string;amount_minor:number}};
+type Pub={id:string;status:Status;title:string;date:string;place:string;published:string;views:number;clicks:number;price:string;promoted:boolean;market?:string};
+const dateKey=(d:Date)=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+const formatDate=(iso:string)=>new Intl.DateTimeFormat('es-AR',{timeZone:'America/Argentina/Buenos_Aires',weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso)).replace(',',' ·').toUpperCase();
+const ago=(iso:string)=>{const m=Math.max(0,Math.round((Date.now()-new Date(iso).getTime())/60000));if(m<60)return `hace ${Math.max(1,m)} min`;const h=Math.floor(m/60);return h<24?`hace ${h} h`:`hace ${Math.floor(h/24)} días`};
+const mapPub=(x:ApiPub):Pub=>{const now=new Date();const expired=x.status!=='active'||new Date(x.expires_at)<now;const today=dateKey(now);const eventDay=dateKey(new Date(x.starts_at));const status:Status=expired?'VENCIDAS':eventDay===today?'ACTIVAS':'PRÓXIMAS';return{id:x.slug,status,title:x.title,date:formatDate(x.starts_at),place:x.neighborhood,published:ago(x.published_at),views:x.views||0,clicks:x.clicks||0,price:x.price_label||'Consultar',promoted:Boolean(x.ojo),market:x.ojo?.market_key}};
 
 export default function MisPublicaciones(){
-  const [status,setStatus]=useState<Status>('ACTIVAS');
-  const rows=data.filter(x=>x.status===status);
-  return <main className="myPub">
-    <header className="myTop"><Link href="/che-mira-v5" className="myLogo">CHE, MIRÁ</Link><nav><Link href="/che-mira-v5/guardados">Guardados</Link><Link href="/che-mira-v5/publicar" className="newPub">+ Nueva publicación</Link></nav></header>
-
-    <section className="myHero"><div><span>PARA QUIEN PUBLICA</span><h1>Mis publicaciones.</h1></div><div className="summary"><p><b>2</b><span>activas</span></p><p><b>214</b><span>visitas</span></p><p><b>58</b><span>clicks afuera</span></p></div></section>
-
-    <section className="statusTabs">{(['ACTIVAS','PRÓXIMAS','VENCIDAS'] as Status[]).map(x=><button key={x} className={status===x?'active':''} onClick={()=>setStatus(x)}>{x}</button>)}</section>
-
-    <section className="pubTable">
-      <div className="tableHead"><span>PUBLICACIÓN</span><span>RENDIMIENTO</span><span>ACCIONES</span></div>
-      {rows.map(x=><article key={x.id}>
-        <div className="pubInfo"><div className="pubFlags"><span>{x.date}</span>{x.promoted&&<b>OJO ACÁ</b>}</div><h2>{x.title}</h2><p>{x.place} · {x.price}</p><small>Publicado {x.published}. Editar no cambia esta antigüedad.</small></div>
-        <div className="pubMetrics"><p><b>{x.views}</b><span>visitas</span></p><p><b>{x.clicks}</b><span>clicks afuera</span></p><p><b>{x.views?Math.round(x.clicks/x.views*100):0}%</b><span>CTR</span></p></div>
-        <div className="pubActions"><Link href={x.id.startsWith('old')?'#':`/che-mira-v5/p/${x.id}`}>Ver ↗</Link><button>Editar</button><button>Compartir</button>{status!=='VENCIDAS'&&<Link className="attention" href={`/che-mira-v5/ojo?listing=${x.id}`}>{x.promoted?'Subir posición':'Dar más atención'}</Link>}{status!=='VENCIDAS'&&<button className="cancel">Cancelar</button>}</div>
-      </article>)}
-      {rows.length===0&&<div className="noRows">No hay publicaciones en este estado.</div>}
-    </section>
-
-    <section className="dashboardRule"><span>REGLA DEL FEED</span><h2>Podés corregir. No podés volver a nacer.</h2><p>Editar título, precio, link o descripción mantiene intacto el momento original de publicación.</p></section>
-  </main>
+  const [status,setStatus]=useState<Status>('ACTIVAS');const [data,setData]=useState<Pub[]>([]);const [loading,setLoading]=useState(true);const [needsAuth,setNeedsAuth]=useState(false);
+  useEffect(()=>{const token=localStorage.getItem('cm_access_token');if(!token){setNeedsAuth(true);setLoading(false);return}fetch('/api/cm/mine',{headers:{Authorization:`Bearer ${token}`}}).then(async r=>{if(r.status===401){localStorage.removeItem('cm_access_token');setNeedsAuth(true);return null}return r.ok?r.json():Promise.reject()}).then(x=>{if(x?.data)setData(x.data.map(mapPub))}).catch(()=>{}).finally(()=>setLoading(false))},[]);
+  const rows=useMemo(()=>data.filter(x=>x.status===status),[data,status]);const active=data.filter(x=>x.status!=='VENCIDAS').length;const views=data.reduce((n,x)=>n+x.views,0);const clicks=data.reduce((n,x)=>n+x.clicks,0);
+  return <main className="myPub"><header className="myTop"><Link href="/che-mira-v5" className="myLogo">CHE, MIRÁ</Link><nav><Link href="/che-mira-v5/guardados">Guardados</Link><Link href="/che-mira-v5/publicar" className="newPub">+ Nueva publicación</Link></nav></header>
+    <section className="myHero"><div><span>PARA QUIEN PUBLICA</span><h1>Mis publicaciones.</h1></div><div className="summary"><p><b>{active}</b><span>vigentes</span></p><p><b>{views}</b><span>visitas</span></p><p><b>{clicks}</b><span>clicks afuera</span></p></div></section>
+    {needsAuth?<section className="noRows"><b>Necesitás entrar para ver tus publicaciones.</b><br/><br/><Link href="/che-mira-v5/acceso?next=/che-mira-v5/mis-publicaciones">Entrar →</Link></section>:<><section className="statusTabs">{(['ACTIVAS','PRÓXIMAS','VENCIDAS'] as Status[]).map(x=><button key={x} className={status===x?'active':''} onClick={()=>setStatus(x)}>{x}</button>)}</section><section className="pubTable"><div className="tableHead"><span>PUBLICACIÓN</span><span>RENDIMIENTO</span><span>ACCIONES</span></div>{loading&&<div className="noRows">Cargando…</div>}{!loading&&rows.map(x=><article key={x.id}><div className="pubInfo"><div className="pubFlags"><span>{x.date}</span>{x.promoted&&<b>OJO ACÁ · {x.market}</b>}</div><h2>{x.title}</h2><p>{x.place} · {x.price}</p><small>Publicado {x.published}. Editar no cambia esta antigüedad.</small></div><div className="pubMetrics"><p><b>{x.views}</b><span>visitas</span></p><p><b>{x.clicks}</b><span>clicks afuera</span></p><p><b>{x.views?Math.round(x.clicks/x.views*100):0}%</b><span>CTR</span></p></div><div className="pubActions"><Link href={`/che-mira-v5/p/${x.id}`}>Ver ↗</Link><button>Editar</button><button>Compartir</button>{status!=='VENCIDAS'&&<Link className="attention" href={`/che-mira-v5/ojo?listing=${encodeURIComponent(x.id)}`}>{x.promoted?'Subir posición':'Dar más atención'}</Link>}{status!=='VENCIDAS'&&<button className="cancel">Cancelar</button>}</div></article>)}{!loading&&rows.length===0&&<div className="noRows">No hay publicaciones en este estado.</div>}</section></>}
+    <section className="dashboardRule"><span>REGLA DEL FEED</span><h2>Podés corregir. No podés volver a nacer.</h2><p>Editar título, precio, link o descripción mantiene intacto el momento original de publicación.</p></section></main>
 }

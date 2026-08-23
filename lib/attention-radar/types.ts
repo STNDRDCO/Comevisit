@@ -1,3 +1,5 @@
+export type RadarAction = "reply" | "quote" | "post" | "follow" | "watch";
+
 export type RadarProject = {
   id: string;
   name: string;
@@ -9,17 +11,27 @@ export type RadarProject = {
   objective: string;
   voice?: string;
   maxResults?: number;
+  mission?: string;
+  audienceArchetypes?: string[];
+  signalFamilies?: Record<string, string[]>;
+  actionRules?: Record<string, string>;
+  scoringWeights?: Record<string, number>;
+  positiveSignals?: string[];
+  negativeSignals?: string[];
+  guardrails?: string[];
 };
 
 export type RadarOpportunity = {
   score: number;
   reason: string;
-  action: "reply" | "quote" | "post" | "follow" | "watch";
+  action: RadarAction;
   sourceUrl?: string;
   author?: string;
   sourceText?: string;
   suggestedCopy?: string;
   fingerprint: string;
+  signalFamily?: string;
+  audienceArchetype?: string;
 };
 
 export type RadarResult = {

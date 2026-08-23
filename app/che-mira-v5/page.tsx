@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {useMemo,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import './style.css';
 
 type TimeKey='HOY'|'ESTA NOCHE'|'MAÑANA'|'FINDE'|'PRÓXIMOS';
@@ -79,6 +79,10 @@ export default function CheMiraV5(){
   const [price,setPrice]=useState<Price>('TODOS');
   const [saved,setSaved]=useState<string[]>([]);
 
+  useEffect(()=>{
+    setSaved(JSON.parse(localStorage.getItem('cm5_saved')||'[]'));
+  },[]);
+
   const recent=useMemo(()=>items.filter(x=>x.time===time).slice(0,5),[time]);
   const explore=useMemo(()=>items.filter(x=>
     x.time===time &&
@@ -87,14 +91,18 @@ export default function CheMiraV5(){
     (price==='TODOS'||x.tier===price)
   ).sort((a,b)=>a.sort-b.sort),[time,category,zone,price]);
 
-  const toggleSave=(id:string)=>setSaved(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+  const toggleSave=(id:string)=>setSaved(prev=>{
+    const next=prev.includes(id)?prev.filter(x=>x!==id):[...prev,id];
+    localStorage.setItem('cm5_saved',JSON.stringify(next));
+    return next;
+  });
   const market=markets[time];
 
   return <main className="cm5">
     <header className="topbar">
       <Link href="/che-mira-v5" className="logo">CHE, MIRÁ</Link>
       <nav><a href="#ojo">Ojo Acá</a><a href="#recien">Recién publicado</a><a href="#explorar">Explorar</a></nav>
-      <div className="topActions"><button className="savedBtn">♡ Guardados <b>{saved.length}</b></button><Link className="publish" href="/che-mira-v5/publicar">+ Publicar</Link></div>
+      <div className="topActions"><Link href="/che-mira-v5/guardados" className="savedBtn">♡ Guardados <b>{saved.length}</b></Link><Link className="publish" href="/che-mira-v5/publicar">+ Publicar</Link></div>
     </header>
 
     <section className="hero">
@@ -128,7 +136,7 @@ export default function CheMiraV5(){
       <div className="recentList">
         {recent.map(x=><article key={x.id}>
           <div className="posted"><b>{x.posted}</b><span>PUBLICADO</span></div>
-          <div className="event"><span className="date">{x.eventDate}</span><small>{x.category}</small><h3>{x.title}</h3><p>{x.place} · {x.detail}</p></div>
+          <div className="event"><span className="date">{x.eventDate}</span><small>{x.category}</small><h3><Link href={`/che-mira-v5/p/${x.id}`}>{x.title}</Link></h3><p>{x.place} · {x.detail}</p></div>
           <div className="eventAction"><strong>{x.price}</strong><button onClick={()=>toggleSave(x.id)} className={saved.includes(x.id)?'heart saved':'heart'}>{saved.includes(x.id)?'♥':'♡'}</button><button className="external">{x.cta}</button></div>
         </article>)}
         {recent.length===0&&<div className="empty">Todavía no se publicó nada para esta ventana.</div>}
@@ -149,7 +157,7 @@ export default function CheMiraV5(){
       <div className="exploreList">
         {explore.map(x=><article key={x.id}>
           <div className="timeBlock"><strong>{x.eventDate}</strong><span>{x.category}</span></div>
-          <div className="exploreMain"><h3>{x.title}</h3><p>{x.place} · {x.detail}</p></div>
+          <div className="exploreMain"><h3><Link href={`/che-mira-v5/p/${x.id}`}>{x.title}</Link></h3><p>{x.place} · {x.detail}</p></div>
           <div className="exploreRight"><strong>{x.price}</strong><button onClick={()=>toggleSave(x.id)} className={saved.includes(x.id)?'heart saved':'heart'}>{saved.includes(x.id)?'♥':'♡'}</button><button className="external">{x.cta}</button></div>
         </article>)}
         {explore.length===0&&<div className="empty">No hay resultados con esos filtros. Probá abrir un poco la búsqueda.</div>}

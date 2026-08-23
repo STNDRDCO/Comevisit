@@ -11,7 +11,7 @@ type Bid={amount_minor:number;listing:null|{slug:string;title:string;neighborhoo
 
 export default function CheMiraV6(){
  const[listings,setListings]=useState<Listing[]>([]);const[bids,setBids]=useState<Bid[]>([]);const[loading,setLoading]=useState(true);const[error,setError]=useState(false);const[saved,setSaved]=useState<string[]>([]);
- useEffect(()=>{try{setSaved(JSON.parse(localStorage.getItem('cm5_saved')||'[]'))}catch{};fetch('/api/cm/listings').then(r=>{if(!r.ok)throw new Error();return r.json()}).then(x=>setListings(Array.isArray(x.data)?x.data:[])).catch(()=>setError(true)).finally(()=>setLoading(false));fetch('/api/cm/ojo?market=TODAY').then(r=>r.ok?r.json():Promise.reject()).then(x=>setBids(Array.isArray(x.data)?x.data:[])).catch(()=>setBids([]))},[]);
+ useEffect(()=>{try{setSaved(JSON.parse(localStorage.getItem('cm5_saved')||'[]'))}catch{};fetch('/api/cm/listings?today=1').then(r=>{if(!r.ok)throw new Error();return r.json()}).then(x=>setListings(Array.isArray(x.data)?x.data:[])).catch(()=>setError(true)).finally(()=>setLoading(false));fetch('/api/cm/ojo?market=TODAY').then(r=>r.ok?r.json():Promise.reject()).then(x=>setBids(Array.isArray(x.data)?x.data:[])).catch(()=>setBids([]))},[]);
  const recent=useMemo(()=>listings.filter(x=>isCheToday(x.starts_at)).sort((a,b)=>new Date(b.published_at).getTime()-new Date(a.published_at).getTime()).slice(0,12),[listings]);
  const fullMarket=bids.filter(x=>x.listing&&isCheToday(x.listing.starts_at));const market=fullMarket.slice(0,5);
  const toggle=(slug:string)=>setSaved(prev=>{const next=prev.includes(slug)?prev.filter(x=>x!==slug):[...prev,slug];localStorage.setItem('cm5_saved',JSON.stringify(next));return next});

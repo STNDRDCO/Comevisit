@@ -16,15 +16,17 @@ export async function GET(req:NextRequest){
   if(!lRes.ok)return NextResponse.json({error:'listings_failed'},{status:502});
   const listings=await lRes.json();
   const ids=listings.map((x:{id:string})=>x.id);
-  if(!ids.length)return NextResponse.json({data:[]});
+  if(!ids.length)return NextResponse.json({data:[],summary:{views:0,clicks:0,publisher_views:0,share_views:0}});
   const inFilter=`in.(${ids.join(',')})`;
-  const [vRes,cRes,bRes]=await Promise.all([
-    fetch(`${URL}/rest/v1/cm_listing_views?select=listing_id&listing_id=${encodeURIComponent(inFilter)}`,{headers:auth,cache:'no-store'}),
+  const [vRes,cRes,bRes,allBidsRes]=await Promise.all([
+    fetch(`${URL}/rest/v1/cm_listing_views?select=listing_id,referrer_kind&listing_id=${encodeURIComponent(inFilter)}`,{headers:auth,cache:'no-store'}),
     fetch(`${URL}/rest/v1/cm_outbound_clicks?select=listing_id&listing_id=${encodeURIComponent(inFilter)}`,{headers:auth,cache:'no-store'}),
-    fetch(`${URL}/rest/v1/cm_ojo_bids?select=listing_id,status,market_key,amount_minor&listing_id=${encodeURIComponent(inFilter)}&status=eq.active`,{headers:auth,cache:'no-store'})
+    fetch(`${URL}/rest/v1/cm_ojo_bids?select=listing_id,status,market_key,amount_minor&listing_id=${encodeURIComponent(inFilter)}&status=eq.active`,{headers:auth,cache:'no-store'}),
+    fetch(`${URL}/rest/v1/cm_ojo_bids?select=listing_id,status,market_key,amount_minor&status=eq.active&order=amount_minor.desc`,{headers:{...base,Authorization:`Bearer ${KEY}`},cache:'no-store'})
   ]);
-  const views=vRes.ok?await vRes.json():[];const clicks=cRes.ok?await cRes.json():[];const bids=bRes.ok?await bRes.json():[];
+  const views=vRes.ok?await vRes.json():[];const clicks=cRes.ok?await cRes.json():[];const bids=bRes.ok?await bRes.json():[];const allBids=allBidsRes.ok?await allBidsRes.json():[];
   const count=(rows:{listing_id:string}[],id:string)=>rows.reduce((n,x)=>n+(x.listing_id===id?1:0),0);
-  const data=listings.map((x:{id:string})=>({...x,views:count(views,x.id),clicks:count(clicks,x.id),ojo:bids.find((b:{listing_id:string})=>b.listing_id===x.id)||null}));
-  return NextResponse.json({data},{headers:{'Cache-Control':'no-store'}});
+  const countRef=(id:string,ref:string)=>views.reduce((n:number,x:{listing_id:string;referrer_kind:string})=>n+(x.listing_id===id&&x.referrer_kind===ref?1:0),0);
+  const data=listings.map((x:{id:string})=>{const ojo=bids.find((b:{listing_id:string})=>b.listing_id===x.id)||null;let rank:null|number=null;if(ojo){const market=allBids.filter((b:{market_key:string})=>b.market_key===ojo.market_key).sort((a:{amount_minor:number},b:{amount_minor:number})=>b.amount_minor-a.amount_minor);const i=market.findIndex((b:{listing_id:string})=>b.listing_id===x.id);rank=i>=0?i+1:null}return{...x,views:count(views,x.id),clicks:count(clicks,x.id),publisher_views:countRef(x.id,'publisher'),share_views:countRef(x.id,'share'),ojo:ojo?{...ojo,rank}:null}});
+  return NextResponse.json({data,summary:{views:views.length,clicks:clicks.length,publisher_views:views.filter((x:{referrer_kind:string})=>x.referrer_kind==='publisher').length,share_views:views.filter((x:{referrer_kind:string})=>x.referrer_kind==='share').length}},{headers:{'Cache-Control':'no-store'}});
 }

@@ -2,7 +2,7 @@ import {NextRequest,NextResponse} from 'next/server';
 
 const URL=process.env.SUPABASE_URL||'https://wpherlcpgktqpyfcrqxs.supabase.co';
 const KEY=process.env.SUPABASE_PUBLISHABLE_KEY||'sb_publishable_twh0JhBP7h5c7XQi_TsgCw_-BFEGQqS';
-const allowed=new Set(['home_view','explore_view','publish_start','publish_blocked','save','unsave','share','ojo_view','ojo_bid_attempt','alpha_invite_view','alpha_invite_redeemed']);
+const allowed=new Set(['home_view','explore_view','publish_start','publish_blocked','save','unsave','share','ojo_view','ojo_bid_attempt','alpha_invite_view','alpha_invite_redeemed','presence']);
 
 export async function POST(req:NextRequest){
   const body=await req.json().catch(()=>null) as null|{event?:string;sessionId?:string;listing?:string;properties?:Record<string,unknown>};

@@ -52,6 +52,30 @@ export type DbLeaderboardEntry = {
   rank: number;
 };
 
+export type CityPulse = {
+  city_id:string;
+  slug:string;
+  city_name:string;
+  country_name:string;
+  country_code:string;
+  published_places:number;
+  verified_businesses:number;
+  crown_volume_cents:number;
+  crown_bid_events:number;
+  last_activity_at:string;
+};
+
+export type CountryPulse = {
+  country_code:string;
+  country_name:string;
+  active_cities:number;
+  published_places:number;
+  verified_businesses:number;
+  crown_volume_cents:number;
+  crown_bid_events:number;
+  last_activity_at:string;
+};
+
 async function supabaseFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...init,
@@ -64,6 +88,14 @@ async function supabaseFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function fetchCities() {
   return supabaseFetch<DbCity[]>('cities?select=*&order=name.asc');
+}
+
+export async function fetchWorldPulse(){
+  const [cities,countries]=await Promise.all([
+    supabaseFetch<CityPulse[]>('city_world_pulse?select=*&order=crown_volume_cents.desc'),
+    supabaseFetch<CountryPulse[]>('country_world_pulse?select=*&order=crown_volume_cents.desc')
+  ]);
+  return {cities,countries};
 }
 
 export async function fetchCityBundle(cityName: string) {

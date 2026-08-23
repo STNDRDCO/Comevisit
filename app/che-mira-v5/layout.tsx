@@ -1,5 +1,6 @@
 import type {Metadata} from 'next';
 import './runtime.css';
+import AlphaTracker from './AlphaTracker';
 
 export const metadata:Metadata={
   title:'CHE, MIRÁ — Qué hay en Buenos Aires',
@@ -15,5 +16,5 @@ export const metadata:Metadata={
 };
 
 export default function CheMiraV5Layout({children}:{children:React.ReactNode}){
-  return children;
+  return <><AlphaTracker/>{children}</>;
 }

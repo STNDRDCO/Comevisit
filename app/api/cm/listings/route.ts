@@ -21,7 +21,6 @@ export async function GET(req:NextRequest){
 export async function POST(req:NextRequest){
   const token=req.headers.get('authorization')?.replace(/^Bearer\s+/i,'');
   if(!token)return NextResponse.json({error:'auth_required'},{status:401});
-
   const userRes=await fetch(`${SUPABASE_URL}/auth/v1/user`,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${token}`},cache:'no-store'});
   if(!userRes.ok)return NextResponse.json({error:'invalid_session'},{status:401});
   const user=await userRes.json();
@@ -40,6 +39,12 @@ export async function POST(req:NextRequest){
 
   const start=new Date(`${body.date}T${body.time}:00-03:00`);
   if(Number.isNaN(start.getTime())||start.getTime()<Date.now()-15*60*1000)return NextResponse.json({error:'invalid_date'},{status:400});
+  const dayStart=new Date(`${body.date}T00:00:00-03:00`);const dayEnd=new Date(dayStart.getTime()+24*60*60*1000);
+  const duplicateParams=new URLSearchParams({select:'slug,title,starts_at,neighborhood',status:'eq.active',title:`ilike.${body.title.trim()}`,neighborhood:`eq.${body.neighborhood.toUpperCase()}`,starts_at:`gte.${dayStart.toISOString()}`});
+  duplicateParams.append('starts_at',`lt.${dayEnd.toISOString()}`);
+  const duplicateRes=await fetch(`${SUPABASE_URL}/rest/v1/cm_listings?${duplicateParams.toString()}`,{headers:{...baseHeaders,Authorization:`Bearer ${SUPABASE_KEY}`},cache:'no-store'});
+  if(duplicateRes.ok){const duplicates=await duplicateRes.json();if(duplicates.length)return NextResponse.json({error:'possible_duplicate',duplicate:duplicates[0]},{status:409})}
+
   const expires=new Date(start.getTime()+12*60*60*1000);
   const baseSlug=body.title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'').slice(0,60)||'publicacion';
   const slug=`${baseSlug}-${Math.random().toString(36).slice(2,7)}`;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProject } from "@/lib/attention-radar/projects";
 import { runXSearch } from "@/lib/attention-radar/xai";
+import { persistenceConfigured, saveRadarResult, urgencyFor } from "@/lib/attention-radar/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -27,7 +28,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await runXSearch(project);
-    return NextResponse.json(result);
+    const persistence = await saveRadarResult(result, "xai").catch((error) => ({
+      persisted: false,
+      newCount: 0,
+      error: error instanceof Error ? error.message : "unknown error"
+    }));
+
+    return NextResponse.json({
+      ...result,
+      persistenceConfigured: persistenceConfigured(),
+      persistence,
+      opportunities: result.opportunities.map((item) => ({ ...item, urgency: urgencyFor(item) }))
+    });
   } catch (error) {
     return NextResponse.json(
       {

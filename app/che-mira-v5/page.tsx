@@ -94,7 +94,7 @@ export default function CheMiraV5(){
     <header className="topbar">
       <Link href="/che-mira-v5" className="logo">CHE, MIRÁ</Link>
       <nav><a href="#ojo">Ojo Acá</a><a href="#recien">Recién publicado</a><a href="#explorar">Explorar</a></nav>
-      <div className="topActions"><button className="savedBtn">♡ Guardados <b>{saved.length}</b></button><button className="publish">+ Publicar</button></div>
+      <div className="topActions"><button className="savedBtn">♡ Guardados <b>{saved.length}</b></button><Link className="publish" href="/che-mira-v5/publicar">+ Publicar</Link></div>
     </header>
 
     <section className="hero">
@@ -158,7 +158,7 @@ export default function CheMiraV5(){
 
     <section className="publishStrip">
       <div><span>¿TENÉS ALGO PARA MOSTRAR?</span><h2>Publicalo.</h2><p>Primera publicación gratis. Después, un microcargo para evitar spam.</p></div>
-      <button>+ Subir algo</button>
+      <Link className="publishStripLink" href="/che-mira-v5/publicar">+ Subir algo</Link>
     </section>
 
     <footer><Link href="/che-mira-v4">← V4</Link><span>CHE, MIRÁ · V5</span><b>ENTRAR CUESTA POCO. LA ATENCIÓN SE DISPUTA.</b></footer>

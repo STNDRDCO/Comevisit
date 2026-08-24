@@ -10,7 +10,7 @@ function todayBounds(now=new Date()){const p=parts(now);const base=new Date(`${p
 export async function GET(req:NextRequest){
   const market=req.nextUrl.searchParams.get('market')||'HOY';
   if(!allowed.has(market))return NextResponse.json({error:'invalid_market'},{status:400});
-  const select='id,market_key,amount_minor,currency,window_starts_at,window_ends_at,listing:cm_listings(slug,title,neighborhood,starts_at)';
+  const select='id,market_key,amount_minor,currency,window_starts_at,window_ends_at,listing:cm_listings(slug,title,category,neighborhood,starts_at,published_at,price_label,description,destination_type,destination_url)';
   const params=new URLSearchParams({select,status:'eq.active',order:'amount_minor.desc'});
   if(market!=='TODAY')params.set('market_key',`eq.${market}`);
   const url=`${SUPABASE_URL}/rest/v1/cm_ojo_bids?${params.toString()}`;

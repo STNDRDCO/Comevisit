@@ -1,7 +1,7 @@
 import type {ReactNode} from 'react';
 
 type SignalInput={category:string;title:string;description?:string|null;destination_type?:string|null;destination_url?:string|null};
-export type SignalKind='food'|'music'|'party'|'culture'|'experience'|'promo';
+export type SignalKind='food'|'music'|'party'|'culture'|'experience'|'promo'|'ticket'|'new';
 export type PlatformKind='instagram'|'spotify'|'whatsapp'|'tickets'|'web';
 
 const hay=(s:string,re:RegExp)=>re.test(s.toLowerCase());
@@ -9,8 +9,10 @@ const hay=(s:string,re:RegExp)=>re.test(s.toLowerCase());
 export function signalFor(x:SignalInput):{kind:SignalKind;label:string}{
  const text=`${x.title} ${x.description||''}`;
  if(hay(text,/promo|2x1|descuento|happy hour|beneficio|\boff\b|oferta/))return{kind:'promo',label:'PROMO'};
- if(x.category==='COMER')return{kind:'food',label:hay(text,/menú|menu|cena|brunch|almuerzo|degustación|parrilla/)?'COMER':'COMER'};
- if(x.category==='MÚSICA')return{kind:'music',label:hay(text,/dj|set|fiesta|club|party/)?'MÚSICA':'MÚSICA'};
+ if(hay(text,/últim[oa]s?|ultim[oa]s?|quedan\s+\d+|cupos?|entradas?\s+(finales|últimas|ultimas)/))return{kind:'ticket',label:'ÚLTIMAS'};
+ if(hay(text,/nuevo|nueva|estreno|lanzamiento|sale hoy|salió hoy|salio hoy|acaba de salir|abrió hoy|abrio hoy|abre hoy/))return{kind:'new',label:'NUEVO'};
+ if(x.category==='COMER')return{kind:'food',label:hay(text,/menú|menu|plato|cena|brunch|almuerzo|degustación|parrilla|fuera de carta/)?'COMER':'COMER'};
+ if(x.category==='MÚSICA')return{kind:'music',label:'MÚSICA'};
  if(x.category==='SALIR')return{kind:'party',label:'SALIR'};
  if(x.category==='CULTURA')return{kind:'culture',label:'CULTURA'};
  return{kind:'experience',label:'EXPERIENCIA'};
@@ -33,6 +35,8 @@ export function SignalIcon({kind}:{kind:SignalKind}){
  if(kind==='party')return svg(<><path d="M5 19 19 5M8 5l1.2 3.8L13 10l-3.8 1.2L8 15l-1.2-3.8L3 10l3.8-1.2L8 5ZM17 14l.8 2.2L20 17l-2.2.8L17 20l-.8-2.2L14 17l2.2-.8L17 14Z"/></>);
  if(kind==='culture')return svg(<><path d="M5 6c2-2 4-2 7 0 3-2 5-2 7 0v8c-2 4-5 6-7 7-2-1-5-3-7-7V6Z"/><path d="M8 10h.01M16 10h.01M9 15c2 1.4 4 1.4 6 0"/></>);
  if(kind==='promo')return svg(<><path d="M4 12 12 4h6l2 2v6l-8 8-8-8Z"/><circle cx="15.5" cy="8.5" r="1"/><path d="m8 15 8-8"/></>);
+ if(kind==='ticket')return svg(<><path d="M4 7h16v4a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4V7Z"/><path d="M12 8.5v7"/></>);
+ if(kind==='new')return svg(<><path d="M12 2.8 14 9l6.2 2-6.2 2-2 6.2-2-6.2-6.2-2 6.2-2 2-6.2Z"/><path d="m18.2 3.8.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1Z"/></>);
  return svg(<><path d="m12 3 2.2 5.2L20 10l-4.4 3.7L17 20l-5-3-5 3 1.4-6.3L4 10l5.8-1.8L12 3Z"/></>);
 }
 
